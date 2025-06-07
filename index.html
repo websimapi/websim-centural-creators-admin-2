@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Centural Creators Admin Panel</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <script type="importmap">
+        {
+            "imports": {
+                "vue": "https://unpkg.com/vue@3/dist/vue.esm-browser.js",
+                "chart.js": "https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"
+            }
+        }
+    </script>
+</head>
+<body>
+    <div id="app">
+        <header>
+            <div class="logo">
+                <img src="images/logo.png" alt="Centural Creators Logo" height="40">
+                <div class="logo-text">
+                    <h1>Centural Creators</h1>
+                    <span>Admin Panel</span>
+                </div>
+            </div>
+            <nav>
+                <ul>
+                    <li><a href="#dashboard" @click="currentView = 'dashboard'">Dashboard</a></li>
+                    <li><a href="#applicants" @click="currentView = 'applicants'">Applicants</a></li>
+                    <li><a href="#analysis" @click="currentView = 'analysis'">AI Analysis</a></li>
+                    <li><a href="#settings" @click="currentView = 'settings'">Settings</a></li>
+                </ul>
+            </nav>
+            <div class="user-profile">
+                <span>{{ user.name }}</span>
+                <button @click="logout">Logout</button>
+            </div>
+        </header>
+
+        <main>
+            <!-- Dashboard View -->
+            <section v-if="currentView === 'dashboard'" class="dashboard-view">
+                <h2>Dashboard</h2>
+                <div class="stats-container">
+                    <div class="stat-card">
+                        <h3>Total Applicants</h3>
+                        <p class="stat-number">{{ stats.totalApplicants }}</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Pending Review</h3>
+                        <p class="stat-number">{{ stats.pendingReview }}</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Approved</h3>
+                        <p class="stat-number">{{ stats.approved }}</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Rejected</h3>
+                        <p class="stat-number">{{ stats.rejected }}</p>
+                    </div>
+                </div>
+                <div class="charts-container">
+                    <div class="chart">
+                        <h3>Applications Over Time</h3>
+                        <canvas id="applicationsChart"></canvas>
+                    </div>
+                    <div class="chart">
+                        <h3>Approval Rate</h3>
+                        <canvas id="approvalRateChart"></canvas>
+                    </div>
+                </div>
+                <div class="recent-activity">
+                    <h3>Recent Activity</h3>
+                    <ul>
+                        <li v-for="activity in recentActivity" :key="activity.id" class="activity-item">
+                            <span class="activity-time">{{ formatTime(activity.timestamp) }}</span>
+                            <span class="activity-description">{{ activity.description }}</span>
+                        </li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- Applicants View -->
+            <section v-if="currentView === 'applicants'" class="applicants-view">
+                <h2>Applicants</h2>
+                <div class="filters">
+                    <input type="text" v-model="filters.search" placeholder="Search applicants...">
+                    <select v-model="filters.status">
+                        <option value="">All Status</option>
+                        <option value="pending">Pending</option>
+                        <option value="reviewing">Reviewing</option>
+                        <option value="approved">Approved</option>
+                        <option value="rejected">Rejected</option>
+                    </select>
+                    <select v-model="filters.sortBy">
+                        <option value="date">Date Applied</option>
+                        <option value="name">Name</option>
+                        <option value="score">AI Score</option>
+                    </select>
+                </div>
+                <table class="applicants-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Applied On</th>
+                            <th>Portfolio</th>
+                            <th>AI Score</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="applicant in filteredApplicants" :key="applicant.id" class="applicant-row">
+                            <td>{{ applicant.name }}</td>
+                            <td>{{ formatDate(applicant.appliedDate) }}</td>
+                            <td><a :href="applicant.portfolioUrl" target="_blank">View</a></td>
+                            <td>
+                                <div class="ai-score">
+                                    <span :class="'score-' + getScoreClass(applicant.aiScore)">{{ applicant.aiScore }}</span>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="status-badge" :class="'status-' + applicant.status">{{ applicant.status }}</span>
+                            </td>
+                            <td>
+                                <button @click="viewApplicant(applicant.id)" class="btn-view">View</button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div class="pagination">
+                    <button @click="prevPage" :disabled="currentPage === 1">Previous</button>
+                    <span>Page {{ currentPage }} of {{ totalPages }}</span>
+                    <button @click="nextPage" :disabled="currentPage === totalPages">Next</button>
+                </div>
+            </section>
+
+            <!-- AI Analysis View -->
+            <section v-if="currentView === 'analysis'" class="analysis-view">
+                <h2>AI Analysis</h2>
+                <div class="analysis-controls">
+                    <div class="analysis-selector">
+                        <label for="applicant-select">Select Applicant:</label>
+                        <select id="applicant-select" v-model="selectedApplicantForAnalysis">
+                            <option value="">Select an applicant</option>
+                            <option v-for="applicant in applicants" :key="applicant.id" :value="applicant.id">{{ applicant.name }}</option>
+                        </select>
+                    </div>
+                    <button @click="runAnalysis" :disabled="!selectedApplicantForAnalysis" class="btn-run-analysis">Run Analysis</button>
+                </div>
+                <div v-if="analysisInProgress" class="analysis-loading">
+                    <div class="loader"></div>
+                    <p>Analysis in progress. This may take a minute...</p>
+                </div>
+                <div v-if="analysisResults" class="analysis-results">
+                    <h3>Analysis Results for {{ getApplicantName(selectedApplicantForAnalysis) }}</h3>
+                    <div class="result-cards">
+                        <div class="result-card">
+                            <h4>Technical Skill</h4>
+                            <div class="score-meter">
+                                <div class="meter-fill" :style="{ width: analysisResults.technicalScore + '%' }"></div>
+                            </div>
+                            <p class="score-value">{{ analysisResults.technicalScore }}/100</p>
+                        </div>
+                        <div class="result-card">
+                            <h4>Creativity</h4>
+                            <div class="score-meter">
+                                <div class="meter-fill" :style="{ width: analysisResults.creativityScore + '%' }"></div>
+                            </div>
+                            <p class="score-value">{{ analysisResults.creativityScore }}/100</p>
+                        </div>
+                        <div class="result-card">
+                            <h4>Code Quality</h4>
+                            <div class="score-meter">
+                                <div class="meter-fill" :style="{ width: analysisResults.codeQualityScore + '%' }"></div>
+                            </div>
+                            <p class="score-value">{{ analysisResults.codeQualityScore }}/100</p>
+                        </div>
+                        <div class="result-card">
+                            <h4>Design Skills</h4>
+                            <div class="score-meter">
+                                <div class="meter-fill" :style="{ width: analysisResults.designScore + '%' }"></div>
+                            </div>
+                            <p class="score-value">{{ analysisResults.designScore }}/100</p>
+                        </div>
+                    </div>
+                    <div class="analysis-summary">
+                        <h4>AI Summary</h4>
+                        <p>{{ analysisResults.summary }}</p>
+                    </div>
+                    <div class="analysis-details">
+                        <h4>Detailed Analysis</h4>
+                        <div v-for="(detail, index) in analysisResults.details" :key="index" class="detail-item">
+                            <h5>{{ detail.title }}</h5>
+                            <p>{{ detail.content }}</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Settings View -->
+            <section v-if="currentView === 'settings'" class="settings-view">
+                <h2>Settings</h2>
+                <div class="settings-group">
+                    <h3>AI Analysis Settings</h3>
+                    <div class="setting-item">
+                        <label for="min-threshold">Minimum Approval Threshold:</label>
+                        <input type="number" id="min-threshold" v-model="settings.minThreshold" min="0" max="100">
+                    </div>
+                    <div class="setting-item">
+                        <label for="analysis-depth">Analysis Depth:</label>
+                        <select id="analysis-depth" v-model="settings.analysisDepth">
+                            <option value="basic">Basic</option>
+                            <option value="standard">Standard</option>
+                            <option value="deep">Deep</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="settings-group">
+                    <h3>Notification Settings</h3>
+                    <div class="setting-item checkbox">
+                        <input type="checkbox" id="notify-new" v-model="settings.notifyNewApplicants">
+                        <label for="notify-new">Email on new applicants</label>
+                    </div>
+                    <div class="setting-item checkbox">
+                        <input type="checkbox" id="notify-analysis" v-model="settings.notifyAnalysisComplete">
+                        <label for="notify-analysis">Email when analysis completes</label>
+                    </div>
+                </div>
+                <div class="settings-group">
+                    <h3>API Integration</h3>
+                    <div class="setting-item">
+                        <label for="api-key">API Key:</label>
+                        <input type="text" id="api-key" v-model="settings.apiKey">
+                    </div>
+                    <div class="setting-item">
+                        <label for="api-endpoint">API Endpoint URL:</label>
+                        <input type="text" id="api-endpoint" v-model="settings.apiEndpoint">
+                    </div>
+                </div>
+                <button @click="saveSettings" class="btn-save-settings">Save Settings</button>
+            </section>
+
+            <!-- Applicant Detail Modal -->
+            <div v-if="selectedApplicant" class="modal">
+                <div class="modal-content">
+                    <span class="close" @click="selectedApplicant = null">&times;</span>
+                    <h2>{{ selectedApplicant.name }}</h2>
+                    <div class="applicant-details">
+                        <div class="detail-group">
+                            <h3>Personal Information</h3>
+                            <p><strong>Email:</strong> {{ selectedApplicant.email }}</p>
+                            <p><strong>Applied On:</strong> {{ formatDate(selectedApplicant.appliedDate) }}</p>
+                            <p><strong>Portfolio:</strong> <a :href="selectedApplicant.portfolioUrl" target="_blank">{{ selectedApplicant.portfolioUrl }}</a></p>
+                        </div>
+                        <div class="detail-group">
+                            <h3>AI Analysis</h3>
+                            <p><strong>Overall Score:</strong> {{ selectedApplicant.aiScore }}/100</p>
+                            <button @click="viewFullAnalysis(selectedApplicant.id)" class="btn-view-analysis">View Full Analysis</button>
+                        </div>
+                        <div class="detail-group">
+                            <h3>Status</h3>
+                            <select v-model="selectedApplicant.status">
+                                <option value="pending">Pending</option>
+                                <option value="reviewing">Reviewing</option>
+                                <option value="approved">Approved</option>
+                                <option value="rejected">Rejected</option>
+                            </select>
+                            <button @click="updateApplicantStatus" class="btn-update-status">Update Status</button>
+                        </div>
+                        <div class="detail-group">
+                            <h3>Notes</h3>
+                            <textarea v-model="selectedApplicant.notes" placeholder="Add notes about this applicant..."></textarea>
+                            <button @click="saveNotes" class="btn-save-notes">Save Notes</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script type="module" src="js/app.js"></script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"4c6229722a6346bc8eb5cb0e5eae5d41","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body>
+</html>
